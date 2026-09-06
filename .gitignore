@@ -1,0 +1,42 @@
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Credenciais e segredos - NUNCA versionar
+.env
+.env.*
+*.pem
+*.key
+credentials
+credentials.json
+.aws/
+
+# Material de apoio pessoal (handoff, enunciado em PDF) - não faz parte
+# do entregável técnico e tem anotações de bastidor do processo, não
+# deve ir para o repositório que o professor vai revisar
+doc/
+
+# Dados (a base é pesada e vem do S3, não faz sentido versionar no Git)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Modelos treinados (arquivos grandes - versionar só se for pequeno e necessário)
+*.pkl
+*.joblib
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+.vscode/settings.json

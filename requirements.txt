@@ -1,0 +1,35 @@
+# Manipulação e análise de dados
+# (sem pin de versão exata: Python 3.14 é muito recente e versões antigas
+# do pandas/numpy não têm wheel pré-compilado pra ele, o que obrigava a
+# compilar do zero e quebrava por falta do Visual Studio Build Tools)
+pandas
+numpy
+scipy
+pyarrow
+
+# Acesso aos dados no S3 (camada Silver/Gold da Fase 2)
+boto3
+
+# Machine Learning
+scikit-learn
+xgboost
+
+# Otimização de hiperparâmetros
+optuna
+
+# Interpretabilidade de modelos
+shap
+
+# Encoding de variáveis categóricas (usado na aula de Feature Engineering)
+category_encoders
+
+# Visualização
+matplotlib
+seaborn
+
+# Notebooks
+jupyter
+ipykernel
+
+# Utilitários
+python-dotenv
