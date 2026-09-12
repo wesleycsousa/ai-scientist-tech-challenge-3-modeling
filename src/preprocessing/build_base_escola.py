@@ -35,10 +35,25 @@ módulo pra deixar isso explícito e fácil de importar em outro lugar.
 """
 
 from pathlib import Path
+from typing import List, Optional
 
 import pandas as pd
 
-from src.preprocessing.load_data import BUCKET, _ler_parquet_do_prefixo
+# Rodar este arquivo direto (botão "Run" do VS Code, ou `python
+# build_base_escola.py`) executa o script com `src/preprocessing/` como
+# working directory do import, não a raiz do repositório - o Python não
+# acha o pacote `src` nesse caso (`ModuleNotFoundError: No module named
+# 'src'`). Rodar com `python -m src.preprocessing.build_base_escola` a
+# partir da raiz do repo evita isso, mas prefiro deixar o arquivo robusto
+# aos dois jeitos de rodar - adiciono a raiz do repo no sys.path só quando
+# este arquivo é executado diretamente (`__name__ == "__main__"`); quando é
+# importado por um notebook ou por outro módulo, quem importa já cuida do
+# próprio sys.path, então não mexo em nada aqui.
+if __name__ == "__main__":
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from src.preprocessing.load_data import BUCKET, _ler_parquet_do_prefixo, _salvar_parquet_no_prefixo
 
 # Decisão final, documentada em reports/decisoes.md (Achado 17): o Censo
 # Escolar (escola_completo) só existe pra ano=2024, e o IDEB só é
@@ -49,6 +64,19 @@ ANO_ESCOLHIDO = 2025
 
 PREFIXO_BRONZE_IDEB_ESCOLA = "bronze/br_inep_ideb/escola/"
 PREFIXO_BRONZE_ESCOLA_COMPLETO = "bronze/br_inep_censo_escolar/escola_completo/"
+# Ingerida em 2026-09-10, resolvendo a pendência de tradução de código
+# registrada no Achado 24 de reports/decisoes.md (na época eu só tinha
+# uma query especulativa via `basedosdados`, sem confirmação de que
+# funcionava - agora é uma tabela real já no nosso bronze).
+PREFIXO_BRONZE_DICIONARIO_ESCOLA = "bronze/br_inep_censo_escolar/dicionario/"
+
+# Camada nova (decisão registrada em reports/decisoes.md): a junção com o
+# dicionário de tradução deixa de acontecer dentro do notebook e passa a
+# fazer parte do pré-processamento. O resultado (base pronta pra modelagem,
+# já com as categorias traduzidas) é publicado aqui, num prefixo próprio -
+# diferente dos prefixos "bronze/" acima (que só leio, veio de ingestão
+# externa), este eu mesmo escrevo, como saída deste módulo.
+PREFIXO_SILVER_MODELO_BASE_ESCOLA = "silver_modelo/br_inep_censo_escolar/base_escola_modelo/"
 
 # Mesmos caches locais já usados nos notebooks 06/07 - se eu já rodei
 # aqueles notebooks antes, esses arquivos já existem e a leitura é
@@ -56,6 +84,17 @@ PREFIXO_BRONZE_ESCOLA_COMPLETO = "bronze/br_inep_censo_escolar/escola_completo/"
 CACHE_IDEB_ESCOLA = Path(__file__).resolve().parents[2] / "data" / "processed" / "ideb_escola.parquet"
 CACHE_ESCOLA_COMPLETO = Path(__file__).resolve().parents[2] / "data" / "processed" / "escola_completo.parquet"
 CACHE_BASE_ESCOLA_MODELAGEM = Path(__file__).resolve().parents[2] / "data" / "processed" / "base_escola_modelagem.parquet"
+CACHE_DICIONARIO_ESCOLA = Path(__file__).resolve().parents[2] / "data" / "processed" / "dicionario_escola.parquet"
+CACHE_BASE_ESCOLA_MODELO = Path(__file__).resolve().parents[2] / "data" / "processed" / "base_escola_modelo.parquet"
+
+# Valor usado quando um código aparece no dado real mas não tem tradução
+# no dicionário. Não deveria ser o caso normal - já testei a cobertura
+# do dicionário contra `escola_completo.parquet` de verdade antes de
+# escrever esta função (ver reports/decisoes.md) e a única coluna com
+# gap foi `tipo_localizacao_diferenciada` (códigos 0 e 8 sem tradução na
+# amostra que testei) - então trato isso como esperado, não como bug,
+# mas deixo visível em vez de mascarar.
+VALOR_CODIGO_NAO_DOCUMENTADO = "codigo_nao_documentado"
 
 # Essas colunas compõem o próprio IDEB (Achado 15 em reports/decisoes.md)
 # - ficam na base retornada aqui como registro/auditoria da variável-alvo,
@@ -103,6 +142,127 @@ def ler_escola_completo(forcar_releitura: bool = False) -> pd.DataFrame:
     CACHE_ESCOLA_COMPLETO.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(CACHE_ESCOLA_COMPLETO, index=False)
     print(f"Cache salvo em: {CACHE_ESCOLA_COMPLETO}")
+    return df
+
+
+def ler_dicionario_escola(forcar_releitura: bool = False) -> pd.DataFrame:
+    """
+    Lê o dicionário de tradução código->texto das colunas categóricas do
+    Censo Escolar (colunas: dataset_id, id_tabela, nome_coluna, chave,
+    valor), com cache local em parquet - mesmo padrão das outras leituras
+    deste módulo.
+    """
+    if CACHE_DICIONARIO_ESCOLA.exists() and not forcar_releitura:
+        print(f"Lendo dicionario_escola do cache local: {CACHE_DICIONARIO_ESCOLA}")
+        df = pd.read_parquet(CACHE_DICIONARIO_ESCOLA)
+    else:
+        print(f"Cache não encontrado, lendo do S3: s3://{BUCKET}/{PREFIXO_BRONZE_DICIONARIO_ESCOLA}")
+        df = _ler_parquet_do_prefixo(BUCKET, PREFIXO_BRONZE_DICIONARIO_ESCOLA)
+        CACHE_DICIONARIO_ESCOLA.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(CACHE_DICIONARIO_ESCOLA, index=False)
+        print(f"Cache salvo em: {CACHE_DICIONARIO_ESCOLA}")
+
+    # Bug real que só apareceu inspecionando o dicionário de verdade
+    # (não aparecia na amostra que eu tinha usado pra testar antes): várias
+    # linhas com id_tabela="escola" têm espaço sobrando no fim de
+    # `nome_coluna` (ex.: "tipo_situacao_funcionamento " em vez de
+    # "tipo_situacao_funcionamento") - isso nunca batia com o nome real da
+    # coluna na base, e a coluna ficava sem tradução nenhuma, sem erro
+    # nenhum (silenciosamente errado - o pior tipo de bug). Normalizo aqui,
+    # uma vez só, pra todo mundo que usar esse dicionário já receber os
+    # nomes limpos.
+    df["nome_coluna"] = df["nome_coluna"].str.strip()
+    df["id_tabela"] = df["id_tabela"].str.strip()
+    return df
+
+
+def _normalizar_chave_codigo(valor):
+    """
+    Normaliza uma chave de código (tanto do dicionário quanto do dado real)
+    pra um formato comum de comparação: int quando dá pra converter (cobre
+    1, 1.0, "1", "1.0" - todos viram o int 1), senão string.
+
+    Bug real encontrado inspecionando o dicionário de verdade: a coluna
+    `chave` do dicionário ingerido vem como *string* (`"1"`, `"2"`...),
+    enquanto o código anterior comparava com um int puro calculado a partir
+    do valor da base - a comparação nunca batia (tipos diferentes), e toda
+    tradução caía no fallback "codigo_nao_documentado_<código>", mesmo pros
+    códigos que o dicionário documenta certinho. Comparar as duas pontas já
+    normalizadas pelo mesmo critério resolve isso.
+    """
+    if pd.isna(valor):
+        return None
+    try:
+        return int(float(valor))
+    except (ValueError, TypeError):
+        return str(valor).strip()
+
+
+def colunas_categoricas_com_dicionario(dicionario: pd.DataFrame, id_tabela: str = "escola") -> List[str]:
+    """
+    Lista definitiva de colunas categóricas da tabela `escola`: em vez de
+    adivinhar por prefixo de nome (heurística que usei antes de ter o
+    dicionário oficial - ver Achado 24 em reports/decisoes.md), uso a
+    própria cobertura do dicionário. Qualquer coluna listada aqui tem
+    código->texto documentado pelo INEP/Base dos Dados - não é palpite.
+    """
+    subset = dicionario[dicionario["id_tabela"] == id_tabela]
+    return sorted(subset["nome_coluna"].unique().tolist())
+
+
+def traduzir_categoricas_escola(
+    df: pd.DataFrame,
+    dicionario: pd.DataFrame,
+    id_tabela: str = "escola",
+    colunas: Optional[List[str]] = None,
+) -> pd.DataFrame:
+    """
+    Substitui os códigos numéricos das colunas categóricas pelo texto
+    oficial do dicionário - deixa o resultado pronto para o
+    `OneHotEncoder` com nomes de feature legíveis (Seção 11.2 do
+    notebook 08), em vez de categorias tipo "tipo_regulamentacao_2.0".
+
+    As colunas de código em `escola_completo` vêm como *string*
+    representando float (ex.: "1.0", "2.0"), não como int puro -
+    confirmei isso rodando um teste real contra
+    `data/processed/escola_completo.parquet` antes de escrever esta
+    função (não é um palpite de dtype). A coluna `chave` do dicionário, por
+    sua vez, vem como *string* também (`"1"`, `"2"`...) - confirmado
+    inspecionando o parquet de verdade. Por isso os dois lados passam pelo
+    mesmo normalizador (`_normalizar_chave_codigo`) antes de comparar, em
+    vez de cada lado converter do seu jeito (bug real que já apareceu
+    aqui - ver Achado 31 em reports/decisoes.md).
+
+    Nulo vira a string "desconhecido" (não uso `NaN` porque depois do
+    `OneHotEncoder` eu quero uma categoria própria e legível pra "não
+    respondeu", igual já documentei na Seção 11.2). Um código que existe
+    no dado mas não tem tradução no dicionário vira
+    "codigo_nao_documentado_<código>", em vez de quebrar ou virar nulo
+    silenciosamente - já sei que isso acontece pelo menos em
+    `tipo_localizacao_diferenciada` (códigos 0 e 8 ainda sem tradução na
+    fatia do dicionário que conferi), fica visível no dado em vez de
+    escondido.
+    """
+    df = df.copy()
+    subset = dicionario[dicionario["id_tabela"] == id_tabela]
+    colunas_alvo = colunas if colunas is not None else sorted(subset["nome_coluna"].unique().tolist())
+
+    for coluna in colunas_alvo:
+        if coluna not in df.columns:
+            continue
+
+        chaves_brutas = subset.loc[subset["nome_coluna"] == coluna, "chave"]
+        valores = subset.loc[subset["nome_coluna"] == coluna, "valor"]
+        mapa = {_normalizar_chave_codigo(k): v for k, v in zip(chaves_brutas, valores)}
+
+        def _traduzir(valor, mapa=mapa):
+            if pd.isna(valor):
+                return "desconhecido"
+            chave = _normalizar_chave_codigo(valor)
+            return mapa.get(chave, f"{VALOR_CODIGO_NAO_DOCUMENTADO}_{chave}")
+
+        df[coluna] = df[coluna].map(_traduzir)
+
     return df
 
 
@@ -196,6 +356,93 @@ def obter_base_escola_modelagem(forcar_releitura: bool = False) -> pd.DataFrame:
     return base
 
 
+def publicar_base_escola_modelo(forcar_releitura: bool = False) -> pd.DataFrame:
+    """
+    Monta a base de escola pronta pra modelagem e já com as colunas
+    categóricas traduzidas (código -> texto, via `traduzir_categoricas_escola`)
+    e publica o resultado como uma camada nova no S3, `silver_modelo` -
+    decisão registrada em `reports/decisoes.md`: a junção com o dicionário
+    deixa de ser um passo dentro do notebook (EDA/seleção de features) e
+    passa a fazer parte do pré-processamento, pronta assim que qualquer
+    notebook pedir a base via `ler_base_escola_modelo()`.
+
+    Rodar isso de novo só é necessário se eu mudar alguma decisão de
+    filtro/tradução rio acima (ex.: um novo Achado sobre o dicionário) - no
+    dia a dia, os notebooks usam `ler_base_escola_modelo()`, que lê o
+    resultado já publicado aqui em vez de remontar tudo de novo.
+
+    Bug real encontrado testando contra a base de verdade: não posso passar
+    `colunas=None` pro `traduzir_categoricas_escola` aqui, porque o
+    dicionário documenta "rede" como coluna categórica da própria
+    `escola_completo` (códigos 1-4) - mas a `rede` que sobrevive em `base`
+    vem do lado do IDEB, já como texto ("municipal"/"estadual"/"federal").
+    Traduzir de novo por engano vira "codigo_nao_documentado_municipal".
+    Por isso restrinjo explicitamente as colunas traduzidas, excluindo as de
+    identificação/alvo que colidem de nome com o lado já-texto do IDEB.
+    """
+    base = obter_base_escola_modelagem(forcar_releitura=forcar_releitura)
+    dicionario = ler_dicionario_escola(forcar_releitura=forcar_releitura)
+
+    # Bug real que só apareceu testando contra a base de verdade: o
+    # dicionário documenta "rede" (coluna categórica da própria
+    # `escola_completo`, códigos 1-4), mas a coluna `rede` que sobrevive
+    # aqui em `base` vem do lado do IDEB, já como texto ("municipal",
+    # "estadual", "federal") - não é o mesmo código. Traduzir ela de novo
+    # tentava converter texto pra número e caía no fallback
+    # "codigo_nao_documentado_<valor>". A cópia vinda de `escola_completo`
+    # (numérica de verdade) tem sufixo `_censo` no merge - essa sim pode ser
+    # traduzida sem problema. Por isso excluo daqui as colunas de
+    # identificação/alvo que colidem de nome com o lado já-texto do IDEB.
+    COLUNAS_NAO_TRADUZIR = {"id_escola", "id_municipio", "sigla_uf", "rede", "ideb", "alvo_ideb"}
+    colunas_categoricas = [
+        c for c in colunas_categoricas_com_dicionario(dicionario)
+        if c in base.columns and c not in COLUNAS_NAO_TRADUZIR and not c.startswith("id_")
+    ]
+    base_traduzida = traduzir_categoricas_escola(base, dicionario, colunas=colunas_categoricas)
+
+    CACHE_BASE_ESCOLA_MODELO.parent.mkdir(parents=True, exist_ok=True)
+    base_traduzida.to_parquet(CACHE_BASE_ESCOLA_MODELO, index=False)
+    print(f"Cache local salvo em: {CACHE_BASE_ESCOLA_MODELO}")
+
+    nome_arquivo = f"base_escola_modelo_ano={ANO_ESCOLHIDO}.parquet"
+    _salvar_parquet_no_prefixo(base_traduzida, BUCKET, PREFIXO_SILVER_MODELO_BASE_ESCOLA, nome_arquivo)
+
+    return base_traduzida
+
+
+def ler_base_escola_modelo(forcar_releitura: bool = False) -> pd.DataFrame:
+    """
+    Lê a base de escola já pronta pra modelagem - grão de escola, alvo
+    calculado, colunas categóricas já traduzidas pra texto pelo dicionário
+    oficial do INEP. Esta é a função que os notebooks (07, 08) devem usar a
+    partir de agora, em vez de chamar `obter_base_escola_modelagem()` e
+    traduzir o dicionário dentro do próprio notebook - decisão registrada em
+    `reports/decisoes.md`: a junção com o dicionário sai do notebook e vira
+    parte do pré-processamento.
+
+    Ordem de tentativa: cache local -> camada `silver_modelo` já publicada
+    no S3 -> se nada disso existir ainda (primeira vez rodando depois dessa
+    mudança, ou num ambiente novo), monta e publica a camada na hora.
+    """
+    if CACHE_BASE_ESCOLA_MODELO.exists() and not forcar_releitura:
+        print(f"Lendo base_escola_modelo do cache local: {CACHE_BASE_ESCOLA_MODELO}")
+        return pd.read_parquet(CACHE_BASE_ESCOLA_MODELO)
+
+    if not forcar_releitura:
+        try:
+            print(f"Cache local não encontrado, lendo camada silver_modelo do S3: "
+                  f"s3://{BUCKET}/{PREFIXO_SILVER_MODELO_BASE_ESCOLA}")
+            df = _ler_parquet_do_prefixo(BUCKET, PREFIXO_SILVER_MODELO_BASE_ESCOLA)
+            CACHE_BASE_ESCOLA_MODELO.parent.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(CACHE_BASE_ESCOLA_MODELO, index=False)
+            print(f"Cache local salvo em: {CACHE_BASE_ESCOLA_MODELO}")
+            return df
+        except FileNotFoundError:
+            print("Camada silver_modelo ainda não existe no S3 - montando e publicando agora.")
+
+    return publicar_base_escola_modelo(forcar_releitura=forcar_releitura)
+
+
 if __name__ == "__main__":
     # Rodar este script isoladamente serve só pra eu conferir que a base
     # de escola está sendo montada corretamente antes de seguir para a
@@ -203,3 +450,8 @@ if __name__ == "__main__":
     base = obter_base_escola_modelagem(forcar_releitura=True)
     print(base.head())
     print(base.dtypes)
+
+    # também confiro a camada já traduzida/publicada (silver_modelo),
+    # que é a que os notebooks de EDA/seleção de features passam a usar
+    base_modelo = publicar_base_escola_modelo(forcar_releitura=True)
+    print(base_modelo.head())
