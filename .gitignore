@@ -16,6 +16,8 @@ credentials.json
 # do entregável técnico e tem anotações de bastidor do processo, não
 # deve ir para o repositório que o professor vai revisar
 doc/
+Claude outputs/
+reports/referencias
 
 # Dados (a base é pesada e vem do S3, não faz sentido versionar no Git)
 data/raw/*
@@ -40,3 +42,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .vscode/settings.json
+
+reports/plano-modelagem-selecao-features.md
