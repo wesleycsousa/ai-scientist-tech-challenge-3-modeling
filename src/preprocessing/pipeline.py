@@ -151,18 +151,23 @@ def carregar_dataset_modelagem(forcar_releitura: bool = False):
     return X, y
 
 
-def construir_preprocessador() -> ColumnTransformer:
+def construir_preprocessador(escalar_numericas: bool = True) -> ColumnTransformer:
     """
     ColumnTransformer com a mesma estratégia de imputação/encoding fechada
-    na Seção 11.2 do notebook 08: mediana + escala pras numéricas (a escala
-    não atrapalha árvore/Random Forest e é necessária se eu testar
-    regressão logística/SVM como baseline), categoria "desconhecido" +
-    One-Hot pras categóricas.
+    na Seção 11.2 do notebook 08: mediana pras numéricas, categoria
+    "desconhecido" + One-Hot pras categóricas.
+
+    `escalar_numericas` controla se entra StandardScaler depois da
+    mediana. Modelos baseados em distância/gradiente (Regressão Logística,
+    SVM) precisam de escala; árvore e Naive Bayes não - e treinar os dois
+    com a mesma escala usada por LR/SVM não teria efeito nenhum na árvore,
+    mas também não é o padrão didático que estou seguindo no notebook de
+    baseline, daí o parâmetro.
     """
-    transformador_numerico = Pipeline(steps=[
-        ("imputador", SimpleImputer(strategy="median")),
-        ("escala", StandardScaler()),
-    ])
+    etapas_numericas = [("imputador", SimpleImputer(strategy="median"))]
+    if escalar_numericas:
+        etapas_numericas.append(("escala", StandardScaler()))
+    transformador_numerico = Pipeline(steps=etapas_numericas)
 
     transformador_categorico = Pipeline(steps=[
         ("imputador", SimpleImputer(strategy="constant", fill_value="desconhecido")),
