@@ -5,6 +5,7 @@ notebook novo.
 """
 
 import matplotlib.pyplot as plt
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 from sklearn.tree import plot_tree
 
 CORES_PADRAO = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#CCB974"]
@@ -27,12 +28,18 @@ def plot_comparacao_modelos(tabela, coluna_modelo: str = "Modelo", coluna_valor:
     plt.show()
 
 
-def plot_arvore(modelo, feature_names, class_names=("Não", "Sim"), figsize=(22, 10), fontsize=8):
+def plot_arvore(modelo, feature_names, class_names=("Não", "Sim"), figsize=(22, 10), fontsize=8,
+                 profundidade_exibicao=None):
     """
     `plot_tree` com os ajustes de tamanho/fonte que uso pra manter a árvore
     legível, e limpando o prefixo `numericas__`/`categoricas__` que o
     `ColumnTransformer.get_feature_names_out()` devolve (não ajuda em nada na
     leitura do gráfico).
+
+    `profundidade_exibicao` limita só o desenho (quantos níveis o `plot_tree`
+    desenha), não o modelo em si - a árvore treinada continua com a
+    profundidade que o `GridSearchCV` escolheu, isso aqui é só pra não gerar
+    uma imagem ilegível quando a árvore otimizada ficou funda.
     """
     nomes_limpos = [
         nome.split("__", 1)[1] if "__" in nome else nome
@@ -46,7 +53,30 @@ def plot_arvore(modelo, feature_names, class_names=("Não", "Sim"), figsize=(22,
         filled=True,
         rounded=True,
         fontsize=fontsize,
+        max_depth=profundidade_exibicao,
     )
+    plt.show()
+
+
+def plot_matrizes_confusao(previsoes: dict, y_verdadeiro, class_names=("Não", "Sim"),
+                            titulo: str = "Matriz de confusão - base de validação"):
+    """
+    Uma matriz de confusão por modelo, lado a lado. `previsoes` no formato
+    `{nome_do_modelo: array_de_previsoes}` - uso com as previsões da base de
+    validação (o cofre fechado), não das previsões via validação cruzada no
+    treino, já que o objetivo aqui é ver o tipo de erro (falso positivo x
+    falso negativo) de cada modelo fora da amostra de treino.
+    """
+    nomes = list(previsoes.keys())
+    fig, eixos = plt.subplots(1, len(nomes), figsize=(5 * len(nomes), 4))
+    if len(nomes) == 1:
+        eixos = [eixos]
+    for eixo, nome in zip(eixos, nomes):
+        matriz = confusion_matrix(y_verdadeiro, previsoes[nome])
+        ConfusionMatrixDisplay(matriz, display_labels=class_names).plot(ax=eixo, colorbar=False, cmap="Blues")
+        eixo.set_title(nome)
+    fig.suptitle(titulo)
+    plt.tight_layout()
     plt.show()
 
 
