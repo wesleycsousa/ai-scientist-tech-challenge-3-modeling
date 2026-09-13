@@ -68,6 +68,34 @@ def _ler_parquet_do_prefixo(bucket: str, prefixo: str) -> pd.DataFrame:
     return pd.concat(partes, ignore_index=True)
 
 
+def _salvar_parquet_no_prefixo(df: pd.DataFrame, bucket: str, prefixo: str, nome_arquivo: str) -> str:
+    """
+    Salva um DataFrame como .parquet direto no S3, sem passar por disco -
+    contrapartida de escrita de `_ler_parquet_do_prefixo` (só leitura).
+
+    Preciso disso a partir da Fase 3 porque uma decisão de arquitetura
+    (registrada em reports/decisoes.md) moveu a junção com o dicionário de
+    tradução de categorias pra dentro do pré-processamento: o resultado
+    dessa junção precisa virar uma camada nova no S3 (`silver_modelo`), não
+    só um cache local, senão qualquer notebook que ler direto do S3 (sem
+    passar pelo cache local) não veria a tradução aplicada.
+
+    Nota: os prefixos que este módulo só lia até aqui (`silver/alunos/`,
+    `gold/...`) são de um bucket onde minha função é só consumidora - não
+    escrevo lá. `silver_modelo/` é uma camada nova, criada por mim mesmo
+    como parte deste pré-processamento, dentro do mesmo bucket do projeto.
+    """
+    buffer = io.BytesIO()
+    df.to_parquet(buffer, index=False)
+    buffer.seek(0)
+
+    chave = f"{prefixo.rstrip('/')}/{nome_arquivo}"
+    s3 = boto3.client("s3")
+    s3.put_object(Bucket=bucket, Key=chave, Body=buffer.getvalue())
+    print(f"Salvo em: s3://{bucket}/{chave}")
+    return chave
+
+
 def ler_alunos() -> pd.DataFrame:
     """
     Lê a Silver `alunos` (1 linha por aluno avaliado, ~3,87M linhas).
