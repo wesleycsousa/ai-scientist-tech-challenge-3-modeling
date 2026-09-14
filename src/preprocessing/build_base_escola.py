@@ -67,7 +67,7 @@ PREFIXO_BRONZE_ESCOLA_COMPLETO = "bronze/br_inep_censo_escolar/escola_completo/"
 # Ingerida em 2026-09-10, resolvendo a pendência de tradução de código
 # registrada no Achado 24 de reports/decisoes.md (na época eu só tinha
 # uma query especulativa via `basedosdados`, sem confirmação de que
-# funcionava - agora é uma tabela real já no nosso bronze).
+# funcionava - agora é uma tabela real já na camada bronze).
 PREFIXO_BRONZE_DICIONARIO_ESCOLA = "bronze/br_inep_censo_escolar/dicionario/"
 
 # Camada nova (decisão registrada em reports/decisoes.md): a junção com o

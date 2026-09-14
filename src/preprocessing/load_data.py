@@ -5,7 +5,7 @@ A base de modelagem da Fase 3 precisa de granularidade por aluno, mas a
 camada Gold da Fase 2 é toda agregada por município. Por isso a base
 principal aqui é a Silver `alunos` (a única com 1 linha por aluno avaliado),
 enriquecida depois com o contexto de infraestrutura escolar que já está
-pronto na Gold. Essa decisão está documentada no handoff do projeto.
+pronto na Gold. Essa decisão está documentada em `reports/decisoes.md` (Dia 1).
 
 Uso boto3 puro (sem awswrangler) pra manter uma dependência a menos - baixo
 o Parquet pra memória com boto3 e leio com pandas/pyarrow.
@@ -53,7 +53,7 @@ def _ler_parquet_do_prefixo(bucket: str, prefixo: str) -> pd.DataFrame:
             # a coluna "ano" é uma partição Hive-style (ano=2023/arquivo.parquet)
             # e não existe fisicamente dentro do parquet - preciso recuperar
             # ela a partir do caminho, senão a coluna some (isso já é um
-            # comportamento documentado no handoff da Fase 2)
+            # comportamento conhecido da camada Silver da Fase 2)
             if "ano" not in df_parte.columns:
                 for pedaco in chave.split("/"):
                     if pedaco.startswith("ano="):
@@ -129,8 +129,8 @@ def montar_base_modelagem() -> pd.DataFrame:
     (id_municipio, ano), trazendo contexto territorial pra cada aluno.
 
     Uso LEFT JOIN porque quero manter todos os alunos mesmo que o
-    município deles não tenha correspondência na infraestrutura (o
-    handoff já registra que isso acontece e não é erro).
+    município deles não tenha correspondência na infraestrutura (é
+    um comportamento conhecido da base da Fase 2, não um erro).
     """
     alunos = ler_alunos()
     infra = ler_infraestrutura_municipio()
