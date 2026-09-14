@@ -12,13 +12,14 @@ credentials
 credentials.json
 .aws/
 
-# Material de apoio pessoal (handoff, enunciado em PDF) - não faz parte
-# do entregável técnico e tem anotações de bastidor do processo, não
-# deve ir para o repositório que o professor vai revisar
+# Material de apoio pessoal (enunciado em PDF, anotações, roteiro e slides da
+# apresentação) - não faz parte do entregável técnico
 doc/
-Claude outputs/
+notas/
+apresentacao/
 reports/referencias/*
 !reports/referencias/selecao_features_revisado.csv
+reports/plano-modelagem-selecao-features.md
 
 # Dados (a base é pesada e vem do S3, não faz sentido versionar no Git)
 data/raw/*
@@ -35,13 +36,11 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Modelos treinados (arquivos grandes - versionar só se for pequeno e necessário)
-*.pkl
-*.joblib
+# Modelos treinados: o modelo final (models/arvore_decisao_final.joblib) é
+# pequeno (< 0,1 MB) e é versionado de propósito, pra quem clonar conseguir
+# rodar src/modeling/prever.py sem retreinar
 
 # Sistema operacional / editor
 .DS_Store
 Thumbs.db
 .vscode/settings.json
-
-reports/plano-modelagem-selecao-features.md

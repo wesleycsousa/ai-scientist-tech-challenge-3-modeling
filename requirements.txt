@@ -10,18 +10,12 @@ pyarrow
 # Acesso aos dados no S3 (camada Silver/Gold da Fase 2)
 boto3
 
-# Machine Learning
+# Machine Learning (pipeline, modelos, busca de hiperparâmetro)
 scikit-learn
-xgboost
-
-# Otimização de hiperparâmetros
-optuna
+joblib
 
 # Interpretabilidade de modelos
 shap
-
-# Encoding de variáveis categóricas (usado na aula de Feature Engineering)
-category_encoders
 
 # Visualização
 matplotlib
