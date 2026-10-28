@@ -1,0 +1,72 @@
+# Fase 4 — dependências unificadas (PLN, LangChain, Deep Learning, IA Generativa)
+#
+# Com a venv ativa:
+#   pip install -r requirements.txt
+#   python -m spacy download pt_core_news_lg
+#   python -c "import nltk; [nltk.download(p) for p in ('punkt','punkt_tab','stopwords','rslp')]"
+#
+# torch: este arquivo instala a versão CPU do PyPI. Para GPU, instale ANTES:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu126
+
+# --- Base científica ---
+numpy>=2
+pandas>=2.2
+scipy
+scikit-learn>=1.5
+matplotlib>=3.9
+seaborn
+plotly
+Pillow>=10.4
+joblib
+tqdm
+
+# --- PLN ---
+nltk
+spacy
+gensim
+seqeval
+pyLDAvis
+bertopic
+
+# --- Deep Learning / IA Generativa ---
+torch
+transformers>=4.48,<5
+accelerate>=1.0
+sentence-transformers>=3.3
+huggingface-hub
+sentencepiece>=0.2.0
+sacremoses
+protobuf
+rank_bm25>=0.2.2
+faiss-cpu>=1.9
+onnx
+onnxscript
+onnxruntime
+
+# --- LangChain 1.x ---
+langchain>=1.4,<2.0
+langchain-core>=1.6,<2.0
+langchain-text-splitters>=1.0,<2.0
+langchain-openai>=1.6,<2.0
+langchain-google-genai>=4.4,<5.0
+langchain-anthropic>=1.7,<2.0
+langchain-community>=0.4.2,<0.5
+langchain-classic        # AgentExecutor (Aula01/Aula02 do LangChain)
+langgraph>=1.2,<2.0
+langgraph-checkpoint-sqlite>=3.1,<4.0
+google-genai>=2.8.0
+tavily-python
+python-dotenv>=1.2.2
+fastapi>=0.141.1
+uvicorn>=0.49.0
+httpx                # usado pelo TestClient do FastAPI nos notebooks
+pydantic>=2.13.4
+
+# --- Notebooks ---
+jupyterlab>=4.2
+notebook>=7
+ipykernel
+ipython
+ipywidgets
+nbconvert
+nbformat
